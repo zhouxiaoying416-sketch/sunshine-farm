@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="阳光农场 —— 一款温馨的 3D 农场小游戏：种田、养动物、加工、做蛋糕。">
+  <title>阳光农场</title>
+  <link rel="icon" href="data:,">
+  <!-- 极小的兜底样式：即使 css/style.css 加载失败，画布与隐藏逻辑仍然可用 -->
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #8fd3f4; }
+    #game { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+    .hidden { display: none !important; }
+  </style>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="mode-start">
+
+  <!-- 共享的 WebGL 画布：农场场景与蛋糕店场景都渲染在这里 -->
+  <canvas id="game" tabindex="0" aria-label="阳光农场游戏画面"></canvas>
+
+  <!-- ====================== 开始界面 ====================== -->
+  <div id="start-screen" class="overlay start-screen" role="dialog" aria-labelledby="start-title">
+    <div class="start-card">
+      <div class="start-sun" aria-hidden="true">
+        <span class="sun-core"></span>
+        <span class="sun-ray ray-1"></span>
+        <span class="sun-ray ray-2"></span>
+        <span class="sun-ray ray-3"></span>
+        <span class="sun-ray ray-4"></span>
+      </div>
+      <h1 id="start-title" class="start-title">阳光农场</h1>
+      <p class="start-flavor">翻土、播种、浇水，喂喂小鸡和奶牛，再去蛋糕店烤一个香喷喷的蛋糕吧！</p>
+      <ul class="start-features" aria-label="游戏内容">
+        <li><span aria-hidden="true">🥕</span> 五种作物，四十多块田地</li>
+        <li><span aria-hidden="true">🐔</span> 鸡舍、鸭塘与奶牛牧场</li>
+        <li><span aria-hidden="true">🏭</span> 纺织厂、面粉坊、乳品坊</li>
+        <li><span aria-hidden="true">🎂</span> 阳光蛋糕店小游戏</li>
+      </ul>
+      <button id="btn-start" class="btn btn-primary btn-big" type="button">开始游戏</button>
+      <p id="start-status" class="start-status">正在准备农场……</p>
+      <div class="start-controls">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 方向键 移动</span>
+        <span><kbd>鼠标</kbd> 转动视角</span>
+        <span><kbd>E</kbd> / 左键 互动</span>
+        <span><kbd>空格</kbd> 跳跃</span>
+        <span><kbd>1</kbd>–<kbd>5</kbd> 选择种子</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================== 农场 HUD ====================== -->
+  <div id="farm-hud" class="hud hidden" aria-live="off">
+
+    <!-- 左上：金币 / 当前种子 / 当前区域 -->
+    <div id="hud-top-left" class="hud-panel hud-top-left">
+      <div class="hud-row hud-coins" title="金币">
+        <span class="hud-icon coin-icon" aria-hidden="true">🪙</span>
+        <span class="hud-label">金币</span>
+        <span id="hud-coins" class="hud-value" data-count="coins">0</span>
+      </div>
+      <div class="hud-row hud-seed" title="当前选择的种子">
+        <span class="hud-icon" aria-hidden="true">🌱</span>
+        <span class="hud-label">当前种子</span>
+        <span id="hud-seed" class="hud-value">未选择</span>
+      </div>
+      <div class="hud-row hud-zone" title="当前所在区域">
+        <span class="hud-icon" aria-hidden="true">📍</span>
+        <span class="hud-label">位置</span>
+        <span id="hud-zone" class="hud-value">家园</span>
+      </div>
+    </div>
+
+    <!-- 右上：背包物品数量 -->
+    <div id="inv-panel" class="hud-panel hud-top-right" aria-label="背包">
+      <div class="inv-title">背包</div>
+
+      <div class="inv-group">
+        <div class="inv-group-name">作物</div>
+        <ul class="inv-list">
+          <li class="inv-item" data-item="carrot"><span class="inv-icon" aria-hidden="true">🥕</span><span class="inv-name">胡萝卜</span><span class="inv-count" data-count="carrot">0</span></li>
+          <li class="inv-item" data-item="cabbage"><span class="inv-icon" aria-hidden="true">🥬</span><span class="inv-name">白菜</span><span class="inv-count" data-count="cabbage">0</span></li>
+          <li class="inv-item" data-item="tomato"><span class="inv-icon" aria-hidden="true">🍅</span><span class="inv-name">番茄</span><span class="inv-count" data-count="tomato">0</span></li>
+          <li class="inv-item" data-item="wheat"><span class="inv-icon" aria-hidden="true">🌾</span><span class="inv-name">小麦</span><span class="inv-count" data-count="wheat">0</span></li>
+          <li class="inv-item" data-item="cotton"><span class="inv-icon" aria-hidden="true">☁️</span><span class="inv-name">棉花</span><span class="inv-count" data-count="cotton">0</span></li>
+        </ul>
+      </div>
+
+      <div class="inv-group">
+        <div class="inv-group-name">畜产</div>
+        <ul class="inv-list">
+          <li class="inv-item" data-item="egg"><span class="inv-icon" aria-hidden="true">🥚</span><span class="inv-name">鸡蛋</span><span class="inv-count" data-count="egg">0</span></li>
+          <li class="inv-item" data-item="duckEgg"><span class="inv-icon" aria-hidden="true">🦆</span><span class="inv-name">鸭蛋</span><span class="inv-count" data-count="duckEgg">0</span></li>
+          <li class="inv-item" data-item="milk"><span class="inv-icon" aria-hidden="true">🥛</span><span class="inv-name">牛奶</span><span class="inv-count" data-count="milk">0</span></li>
+        </ul>
+      </div>
+
+      <div class="inv-group">
+        <div class="inv-group-name">加工品</div>
+        <ul class="inv-list">
+          <li class="inv-item" data-item="flour"><span class="inv-icon" aria-hidden="true">🍚</span><span class="inv-name">面粉</span><span class="inv-count" data-count="flour">0</span></li>
+          <li class="inv-item" data-item="cloth"><span class="inv-icon" aria-hidden="true">🧵</span><span class="inv-name">布料</span><span class="inv-count" data-count="cloth">0</span></li>
+          <li class="inv-item" data-item="butter"><span class="inv-icon" aria-hidden="true">🧈</span><span class="inv-name">黄油</span><span class="inv-count" data-count="butter">0</span></li>
+          <li class="inv-item" data-item="cheese"><span class="inv-icon" aria-hidden="true">🧀</span><span class="inv-name">奶酪</span><span class="inv-count" data-count="cheese">0</span></li>
+          <li class="inv-item" data-item="cake"><span class="inv-icon" aria-hidden="true">🎂</span><span class="inv-name">售出蛋糕</span><span class="inv-count" data-count="cake">0</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 底部中央：种子袋（数字键 1–5 或点击选择） -->
+    <div id="seed-bar" class="hud-panel seed-bar" role="toolbar" aria-label="种子袋">
+      <div class="seed-bar-title">种子袋</div>
+      <div class="seed-slots">
+        <button class="seed-slot" type="button" data-seed="carrot" data-key="1" title="胡萝卜种子（按 1）">
+          <span class="seed-key">1</span>
+          <span class="seed-icon" aria-hidden="true">🥕</span>
+          <span class="seed-name">胡萝卜</span>
+          <span class="seed-count" data-count="seed_carrot">0</span>
+        </button>
+        <button class="seed-slot" type="button" data-seed="cabbage" data-key="2" title="白菜种子（按 2）">
+          <span class="seed-key">2</span>
+          <span class="seed-icon" aria-hidden="true">🥬</span>
+          <span class="seed-name">白菜</span>
+          <span class="seed-count" data-count="seed_cabbage">0</span>
+        </button>
+        <button class="seed-slot" type="button" data-seed="tomato" data-key="3" title="番茄种子（按 3）">
+          <span class="seed-key">3</span>
+          <span class="seed-icon" aria-hidden="true">🍅</span>
+          <span class="seed-name">番茄</span>
+          <span class="seed-count" data-count="seed_tomato">0</span>
+        </button>
+        <button class="seed-slot" type="button" data-seed="wheat" data-key="4" title="小麦种子（按 4）">
+          <span class="seed-key">4</span>
+          <span class="seed-icon" aria-hidden="true">🌾</span>
+          <span class="seed-name">小麦</span>
+          <span class="seed-count" data-count="seed_wheat">0</span>
+        </button>
+        <button class="seed-slot" type="button" data-seed="cotton" data-key="5" title="棉花种子（按 5）">
+          <span class="seed-key">5</span>
+          <span class="seed-icon" aria-hidden="true">☁️</span>
+          <span class="seed-name">棉花</span>
+          <span class="seed-count" data-count="seed_cotton">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 屏幕中央的小准星 -->
+    <div id="crosshair" class="crosshair" aria-hidden="true"></div>
+
+    <!-- 互动提示，例如「按 E 浇水」「按 E 进入蛋糕店」 -->
+    <div id="prompt" class="prompt hidden" role="status">
+      <span id="prompt-key" class="prompt-key">E</span>
+      <span id="prompt-text" class="prompt-text">互动</span>
+      <span id="prompt-sub" class="prompt-sub"></span>
+    </div>
+
+    <!-- 加工进度条（纺织厂 / 面粉坊 / 乳品坊 等） -->
+    <div id="progress" class="progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div id="progress-label" class="progress-label">加工中……</div>
+      <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+    </div>
+
+    <!-- 进入区域时短暂显示的大标题 -->
+    <div id="zone-banner" class="zone-banner hidden" aria-hidden="true">家园</div>
+
+    <!-- 点击捕获鼠标的提示 -->
+    <div id="pointer-hint" class="pointer-hint hidden">点击画面以控制视角 · 也可按住鼠标拖动旋转</div>
+
+    <!-- 常驻操作提示 -->
+    <div id="hints" class="hints" aria-label="操作提示">
+      <span><kbd>WASD</kbd>/<kbd>方向键</kbd> 移动</span>
+      <span><kbd>鼠标</kbd> 视角</span>
+      <span><kbd>E</kbd>/<kbd>左键</kbd> 互动</span>
+      <span><kbd>空格</kbd> 跳跃</span>
+      <span><kbd>1</kbd>–<kbd>5</kbd> 选种子</span>
+      <span><kbd>Esc</kbd> 释放鼠标</span>
+    </div>
+  </div>
+
+  <!-- ====================== 蛋糕店小游戏界面 ====================== -->
+  <div id="cake-root" class="cake-root hidden" aria-label="阳光蛋糕店">
+
+    <!-- 顶栏：店名 / 计时 / 得分 / 金币 / 暂停 -->
+    <div id="cake-topbar" class="cake-topbar">
+      <div class="cake-brand"><span aria-hidden="true">🎂</span> 阳光蛋糕店</div>
+      <div class="cake-stat cake-stat-timer" title="剩余时间">
+        <span class="cake-stat-label">⏱ 剩余</span>
+        <span id="cake-timer" class="cake-stat-value">60</span>
+        <span class="cake-stat-unit">秒</span>
+      </div>
+      <div class="cake-timer-track" aria-hidden="true"><div id="cake-timer-fill" class="cake-timer-fill"></div></div>
+      <div class="cake-stat" title="累计得分">
+        <span class="cake-stat-label">⭐ 得分</span>
+        <span id="cake-score" class="cake-stat-value">0</span>
+      </div>
+      <div class="cake-stat" title="金币">
+        <span class="cake-stat-label">🪙 金币</span>
+        <span id="cake-coins" class="cake-stat-value" data-count="coins">0</span>
+      </div>
+      <div class="cake-stat" title="已完成订单">
+        <span class="cake-stat-label">🧾 订单</span>
+        <span id="cake-served" class="cake-stat-value">0</span>
+      </div>
+      <button id="btn-cake-pause" class="btn btn-small" type="button" title="暂停（Esc）">暂停</button>
+    </div>
+
+    <!-- 左侧：顾客订单小票 -->
+    <div id="cake-ticket" class="cake-panel cake-ticket" aria-label="顾客订单">
+      <div class="ticket-head">
+        <span class="ticket-title">顾客订单</span>
+        <span id="cake-order-no" class="ticket-no">#1</span>
+      </div>
+      <div class="ticket-customer">
+        <span id="cake-customer-face" class="ticket-face" aria-hidden="true">👧</span>
+        <span id="cake-customer-name" class="ticket-name">顾客</span>
+      </div>
+      <p id="cake-order-text" class="ticket-text">正在等待顾客点单……</p>
+      <ul class="ticket-req">
+        <li class="req-row" data-req="base">
+          <span class="req-label">蛋糕胚</span>
+          <span id="cake-req-base" class="req-value">—</span>
+          <span id="cake-check-base" class="req-check" aria-hidden="true"></span>
+        </li>
+        <li class="req-row" data-req="filling">
+          <span class="req-label">夹心</span>
+          <span id="cake-req-filling" class="req-value">—</span>
+          <span id="cake-check-filling" class="req-check" aria-hidden="true"></span>
+        </li>
+        <li class="req-row" data-req="toppings">
+          <span class="req-label">装饰</span>
+          <span id="cake-req-toppings" class="req-value">—</span>
+          <span id="cake-check-toppings" class="req-check" aria-hidden="true"></span>
+        </li>
+      </ul>
+      <div class="ticket-reward">
+        <span>完美报酬</span>
+        <span class="ticket-reward-value">🪙 <span id="cake-order-reward">0</span></span>
+      </div>
+    </div>
+
+    <!-- 顶部中央：制作步骤指示 -->
+    <ol id="cake-steps" class="cake-steps" aria-label="制作步骤">
+      <li class="cake-step active" data-step="base"><span class="step-num">1</span>蛋糕胚</li>
+      <li class="cake-step" data-step="filling"><span class="step-num">2</span>夹心</li>
+      <li class="cake-step" data-step="toppings"><span class="step-num">3</span>装饰</li>
+      <li class="cake-step" data-step="serve"><span class="step-num">4</span>上桌</li>
+    </ol>
+
+    <!-- 店内提示，例如「材料不足」 -->
+    <div id="cake-msg" class="cake-msg hidden" role="status">材料不足</div>
+
+    <!-- 右侧：农场食材库存 + 当前蛋糕 -->
+    <div id="cake-pantry" class="cake-panel cake-pantry" aria-label="农场食材">
+      <div class="pantry-title">农场食材</div>
+      <ul class="pantry-list">
+        <li class="pantry-item" data-item="flour"><span class="pantry-icon" aria-hidden="true">🍚</span><span class="pantry-name">面粉</span><span class="pantry-count" data-count="flour">0</span></li>
+        <li class="pantry-item" data-item="egg"><span class="pantry-icon" aria-hidden="true">🥚</span><span class="pantry-name">鸡蛋</span><span class="pantry-count" data-count="egg">0</span></li>
+        <li class="pantry-item" data-item="duckEgg"><span class="pantry-icon" aria-hidden="true">🦆</span><span class="pantry-name">鸭蛋</span><span class="pantry-count" data-count="duckEgg">0</span></li>
+        <li class="pantry-item" data-item="milk"><span class="pantry-icon" aria-hidden="true">🥛</span><span class="pantry-name">牛奶</span><span class="pantry-count" data-count="milk">0</span></li>
+        <li class="pantry-item" data-item="butter"><span class="pantry-icon" aria-hidden="true">🧈</span><span class="pantry-name">黄油</span><span class="pantry-count" data-count="butter">0</span></li>
+        <li class="pantry-item" data-item="cheese"><span class="pantry-icon" aria-hidden="true">🧀</span><span class="pantry-name">奶酪</span><span class="pantry-count" data-count="cheese">0</span></li>
+        <li class="pantry-item" data-item="tomato"><span class="pantry-icon" aria-hidden="true">🍅</span><span class="pantry-name">番茄</span><span class="pantry-count" data-count="tomato">0</span></li>
+      </ul>
+      <p id="cake-recipe-tip" class="pantry-tip">蛋糕胚配方：面粉×1 + 鸡蛋或鸭蛋×1 + 牛奶×1</p>
+
+      <div class="pantry-title pantry-title-second">当前蛋糕</div>
+      <ul class="cake-current">
+        <li><span class="cur-label">蛋糕胚</span><span id="cake-cur-base" class="cur-value">未选择</span></li>
+        <li><span class="cur-label">夹心</span><span id="cake-cur-filling" class="cur-value">未选择</span></li>
+        <li><span class="cur-label">装饰</span><span id="cake-cur-toppings" class="cur-value">无</span></li>
+      </ul>
+    </div>
+
+    <!-- 底部：工作站（点击按钮，3D 蛋糕会随之变化） -->
+    <div id="cake-stations" class="cake-panel cake-stations" aria-label="工作站">
+
+      <div class="station-group active" data-group="base">
+        <div class="station-title"><span class="station-num">1</span>烤蛋糕胚<span class="station-note">消耗 面粉+蛋+牛奶</span></div>
+        <div class="station-buttons">
+          <button class="station-btn" type="button" data-station="base" data-value="vanilla">
+            <span class="swatch swatch-vanilla" aria-hidden="true"></span>
+            <span class="station-name">香草胚</span>
+          </button>
+          <button class="station-btn" type="button" data-station="base" data-value="chocolate">
+            <span class="swatch swatch-chocolate" aria-hidden="true"></span>
+            <span class="station-name">巧克力胚</span>
+          </button>
+          <button class="station-btn" type="button" data-station="base" data-value="matcha">
+            <span class="swatch swatch-matcha" aria-hidden="true"></span>
+            <span class="station-name">抹茶胚</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="station-group" data-group="filling">
+        <div class="station-title"><span class="station-num">2</span>抹夹心<span class="station-note">单选</span></div>
+        <div class="station-buttons">
+          <button class="station-btn" type="button" data-station="filling" data-value="strawberry">
+            <span class="swatch swatch-strawberry" aria-hidden="true"></span>
+            <span class="station-name">草莓酱</span>
+          </button>
+          <button class="station-btn" type="button" data-station="filling" data-value="cream">
+            <span class="swatch swatch-cream" aria-hidden="true"></span>
+            <span class="station-name">奶油</span>
+          </button>
+          <button class="station-btn" type="button" data-station="filling" data-value="chocolate">
+            <span class="swatch swatch-chocosauce" aria-hidden="true"></span>
+            <span class="station-name">巧克力酱</span>
+          </button>
+          <button class="station-btn" type="button" data-station="filling" data-value="cheese">
+            <span class="swatch swatch-cheese" aria-hidden="true"></span>
+            <span class="station-name">奶酪</span>
+            <span class="station-cost">奶酪×1</span>
+          </button>
+        </div>
+      </div>      <div class="station-group" data-group="toppings">
+        <div class="station-title"><span class="station-num">3</span>加装饰<span class="station-note">可多选，再点一次取消</span></div>
+        <div class="station-buttons">
+          <button class="station-btn" type="button" data-station="toppings" data-value="strawberry">
+            <span class="station-icon" aria-hidden="true">🍓</span>
+            <span class="station-name">草莓</span>
+          </button>
+          <button class="station-btn" type="button" data-station="toppings" data-value="creamFlower">
+            <span class="station-icon" aria-hidden="true">🍥</span>
+            <span class="station-name">奶油花</span>
+            <span class="station-cost">黄油×1</span>
+          </button>
+          <button class="station-btn" type="button" data-station="toppings" data-value="berry">
+            <span class="station-icon" aria-hidden="true">🫐</span>
+            <span class="station-name">浆果</span>
+          </button>
+          <button class="station-btn" type="button" data-station="toppings" data-value="chocoChips">
+            <span class="station-icon" aria-hidden="true">🍫</span>
+            <span class="station-name">巧克力碎</span>
+          </button>
+          <button class="station-btn" type="button" data-station="toppings" data-value="cherry">
+            <span class="station-icon" aria-hidden="true">🍒</span>
+            <span class="station-name">樱桃</span>
+          </button>
+          <button class="station-btn" type="button" data-station="toppings" data-value="tomato">
+            <span class="station-icon" aria-hidden="true">🍅</span>
+            <span class="station-name">小番茄</span>
+            <span class="station-cost">番茄×1</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="station-group station-serve" data-group="serve">
+        <div class="station-title"><span class="station-num">4</span>出餐<span class="station-note">确认后交给顾客</span></div>
+        <div class="station-buttons">
+          <button id="btn-cake-reset" class="station-btn station-btn-reset" type="button">
+            <span class="station-icon" aria-hidden="true">🧹</span>
+            <span class="station-name">重做</span>
+          </button>
+          <button id="btn-cake-serve" class="station-btn station-btn-serve" type="button">
+            <span class="station-icon" aria-hidden="true">🔔</span>
+            <span class="station-name">上菜！</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 订单结算弹窗 -->
+    <div id="cake-result" class="cake-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cake-result-title">
+      <div class="cake-dialog">
+        <div id="cake-result-face" class="result-face" aria-hidden="true">😊</div>
+        <h2 id="cake-result-title" class="dialog-title">订单完成！</h2>
+        <div id="cake-result-stars" class="result-stars" aria-label="评价">★★★</div>
+        <p id="cake-result-text" class="result-text">顾客非常满意！</p>
+        <ul class="result-list">
+          <li><span class="result-label">蛋糕胚</span><span id="cake-result-base" class="result-value">—</span></li>
+          <li><span class="result-label">夹心</span><span id="cake-result-filling" class="result-value">—</span></li>
+          <li><span class="result-label">装饰</span><span id="cake-result-toppings" class="result-value">—</span></li>
+          <li><span class="result-label">时间奖励</span><span id="cake-result-time" class="result-value">+0</span></li>
+        </ul>
+        <div class="result-total">
+          <div class="result-total-item"><span class="result-total-label">本单得分</span><span id="cake-result-score" class="result-total-value">0</span></div>
+          <div class="result-total-item"><span class="result-total-label">获得金币</span><span class="result-total-value">🪙 <span id="cake-result-coins">0</span></span></div>
+        </div>
+        <div class="dialog-buttons">
+          <button id="btn-cake-next" class="cake-btn cake-btn-primary" type="button">下一单</button>
+          <button id="btn-cake-result-return" class="cake-btn cake-btn-ghost" type="button">返回农场</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 暂停遮罩 -->
+    <div id="cake-pause" class="cake-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cake-pause-title">
+      <div class="cake-dialog cake-dialog-small">
+        <div class="result-face" aria-hidden="true">☕</div>
+        <h2 id="cake-pause-title" class="dialog-title">已暂停</h2>
+        <p class="result-text">休息一下，蛋糕不会跑掉～</p>
+        <div class="dialog-buttons dialog-buttons-column">
+          <button id="btn-cake-resume" class="cake-btn cake-btn-primary" type="button">继续制作</button>
+          <button id="btn-cake-return" class="cake-btn cake-btn-ghost" type="button">返回农场</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 全局提示消息 -->
+  <div id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="three.min.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/player.js"></script>
+<script src="js/world.js"></script>
+<script src="js/systems.js"></script>
+<script src="js/cake.js"></script>
+<script src="js/main.js"></script>
+</body></html>
